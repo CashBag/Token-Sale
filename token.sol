@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity 0.4.18;
 
 // ----------------------------------------------------------------------------
 //
@@ -214,14 +214,6 @@ contract FixedSupplyToken is ERC20Interface, Owned {
         Approval(msg.sender, spender, tokens);
         ApproveAndCallFallBack(spender).receiveApproval(msg.sender, tokens, this, data);
         return true;
-    }
-
-
-    // ------------------------------------------------------------------------
-    // Don't accept ETH
-    // ------------------------------------------------------------------------
-    function() public payable {
-        revert();
     }
 
 
