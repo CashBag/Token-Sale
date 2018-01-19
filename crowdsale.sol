@@ -120,21 +120,18 @@ contract Haltable is Ownable {
 
 contract Crowdsale  is Haltable {
     using SafeMath for uint256;
-    event GoalReached(address beneficiary, uint amountRaised);
     event FundTransfer(address backer, uint amount, bool isContribution);
     // Crowdsale end time has been changed
     event EndsAtChanged(uint deadline);
     event CSClosed(bool crowdsaleClosed);
 
     address public beneficiary;
-    uint public fundingGoal;
     uint public amountRaised;
     uint public amountAvailable;
     uint public deadline;
     uint public price;
     token public tokenReward;
     mapping(address => uint256) public balanceOf;
-    bool public fundingGoalReached = false;
     bool public crowdsaleClosed = false;
 
     uint public numTokensLeft;
@@ -148,11 +145,10 @@ contract Crowdsale  is Haltable {
      * Setup the owner
      */
     function Crowdsale(
-    address ifSuccessfulSendTo,
-    uint fundingGoalInEthers,
-    address addressOfTokenUsedAsReward,
-    uint unixTimestampEnd,
-    uint initialTokenSupply
+        address ifSuccessfulSendTo,
+        address addressOfTokenUsedAsReward,
+        uint unixTimestampEnd,
+        uint initialTokenSupply
     ) public {
         owner = msg.sender;
 
@@ -169,7 +165,6 @@ contract Crowdsale  is Haltable {
         }
 
         beneficiary = ifSuccessfulSendTo;
-        fundingGoal = fundingGoalInEthers * 1 ether;
         price = 0.000000000000166666 ether;
         tokenReward = token(addressOfTokenUsedAsReward);
     }
@@ -237,13 +232,9 @@ contract Crowdsale  is Haltable {
         }
     }
 
-    /**
-     * Withdraw the funds
-     *
-     * Checks to see if goal or time limit has been reached, and if so, and the funding goal was reached,
-     * sends the entire amount to the beneficiary. If goal was not reached, each contributor can withdraw
-     * the amount they contributed.
-     */
+    ///////////////////////////////////////////////////////////
+    //     * Withdraw received funds
+    ///////////////////////////////////////////////////////////
     function safeWithdrawal() public onlyOwner{
         if(amountAvailable < 0)
         {
