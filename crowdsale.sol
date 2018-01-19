@@ -170,7 +170,6 @@ contract Crowdsale  is Haltable {
 
         beneficiary = ifSuccessfulSendTo;
         fundingGoal = fundingGoalInEthers * 1 ether;
-//        price = 0.000000000000833333 ether;
         price = 0.000000000000166666 ether;
         tokenReward = token(addressOfTokenUsedAsReward);
     }
@@ -183,12 +182,13 @@ contract Crowdsale  is Haltable {
     function () public stopInEmergency payable {
         require(!crowdsaleClosed);
         uint amount = msg.value;
-        uint leastAmount = 500000000000;
+        uint leastAmount = 600000000000;
         uint numTokens = amount.div(price);
 
-        uint stageTwo = 1515672900; // 01/11/2018 @ 12:15pm (UTC)
-        uint stageThree = 1515673800;// 01/11/2018 @ 12:00pm (UTC) - 1800 / 30min
-        uint stageFour = 1515674700;// 01/11/2018 @ 12:30pm (UTC)
+        uint stageOne = 1516622400;// 01/22/2018 @ 12:00pm (UTC)
+        uint stageTwo = 1517227200;// 01/29/2018 @ 12:00pm (UTC)
+        uint stageThree = 1517832000;// 02/05/2018 @ 12:00pm (UTC) - 1800 / 30min
+        uint stageFour = 1518436800;// 02/12/2018 @ 12:00pm (UTC)
 
         uint numBonusTokens;
         uint totalNumTokens;
@@ -196,7 +196,13 @@ contract Crowdsale  is Haltable {
         /////////////////////////////
         //  Next step is to add in a check to see once the new price goes live
         ////////////////////////////
-        if(now < stageTwo)
+        if(now < stageOne)
+        {
+            //  40% Presale bonus
+            numBonusTokens = (numTokens.div(100)).mul(40);
+            totalNumTokens = numTokens.add(numBonusTokens);
+        }
+        else if(now < stageTwo)
         {
             //  20% bonus
             numBonusTokens = (numTokens.div(100)).mul(20);
