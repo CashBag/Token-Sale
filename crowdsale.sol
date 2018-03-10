@@ -1,285 +1,227 @@
 pragma solidity 0.4.18;
 
+// ----------------------------------------------------------------------------
+//
+// Symbol      : CBC
+// Name        : CashBagCoin
+// Total supply: 367,000,000.000000000000000000
+// Decimals    : 9
+//
+// ----------------------------------------------------------------------------
 
-/**
- * @title SafeMath
- * @dev Math operations with safety checks that throw on error
- */
+// ----------------------------------------------------------------------------
+// Safe maths
+// ----------------------------------------------------------------------------
+
 library SafeMath {
-    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-        if (a == 0) {
-            return 0;
-        }
-        uint256 c = a * b;
-        assert(c / a == b);
-        return c;
+    function add(uint a, uint b) internal pure returns (uint c) {
+        c = a + b;
+        require(c >= a);
     }
 
-    function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        // assert(b > 0); // Solidity automatically throws when dividing by 0
-        uint256 c = a / b;
-        // assert(a == b * c + a % b); // There is no case in which this doesn't hold
-        return c;
+    function sub(uint a, uint b) internal pure returns (uint c) {
+        require(b <= a);
+        c = a - b;
     }
 
-    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        assert(b <= a);
-        return a - b;
+    function mul(uint a, uint b) internal pure returns (uint c) {
+        c = a * b;
+        require(a == 0 || c / a == b);
     }
 
-    function add(uint256 a, uint256 b) internal pure returns (uint256) {
-        uint256 c = a + b;
-        assert(c >= a);
-        return c;
+    function div(uint a, uint b) internal pure returns (uint c) {
+        require(b > 0);
+        c = a / b;
     }
 }
 
-interface token {
-    function transfer(address receiver, uint amount) public;
+// ----------------------------------------------------------------------------
+// ERC Token Standard #20 Interface
+// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20-token-standard.md
+// ----------------------------------------------------------------------------
+
+contract ERC20Interface {
+    function totalSupply() public constant returns (uint);
+    function balanceOf(address tokenOwner) public constant returns (uint balance);
+    function allowance(address tokenOwner, address spender) public constant returns (uint remaining);
+    function transfer(address to, uint tokens) public returns (bool success);
+    function approve(address spender, uint tokens) public returns (bool success);
+    function transferFrom(address from, address to, uint tokens) public returns (bool success);
+
+    event Transfer(address indexed from, address indexed to, uint tokens);
+    event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
 }
 
 
-/**
- * @title Ownable
- * @dev The Ownable contract has an owner address, and provides basic authorization control
- * functions, this simplifies the implementation of "user permissions".
- */
-contract Ownable {
+// ----------------------------------------------------------------------------
+// Contract function to receive approval and execute function in one call
+//
+// Borrowed from MiniMeToken
+// ----------------------------------------------------------------------------
+
+contract ApproveAndCallFallBack {
+    function receiveApproval(address from, uint256 tokens, address token, bytes data) public;
+}
+
+// ----------------------------------------------------------------------------
+// Owned contract
+// ----------------------------------------------------------------------------
+
+contract Owned {
     address public owner;
+    address public newOwner;
 
+    event OwnershipTransferred(address indexed _from, address indexed _to);
 
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
-
-    /**
-     * @dev The Ownable constructor sets the original `owner` of the contract to the sender
-     * account.
-     */
-    function Ownable() public {
+    function Owned() public {
         owner = msg.sender;
     }
 
-
-    /**
-     * @dev Throws if called by any account other than the owner.
-     */
-    modifier onlyOwner() {
+    modifier onlyOwner {
         require(msg.sender == owner);
         _;
     }
 
+    function transferOwnership(address _newOwner) public onlyOwner {
+        newOwner = _newOwner;
+    }
 
-    /**
-     * @dev Allows the current owner to transfer control of the contract to a newOwner.
-     * @param newOwner The address to transfer ownership to.
-     */
-    function transferOwnership(address newOwner) public onlyOwner {
-        require(newOwner != address(0));
+    function acceptOwnership() public {
+        require(msg.sender == newOwner);
         OwnershipTransferred(owner, newOwner);
         owner = newOwner;
+        newOwner = address(0);
     }
-
 }
 
 
-/*
- * Haltable
- *
- * Abstract contract that allows children to implement an
- * emergency stop mechanism. Differs from Pausable by causing a throw when in halt mode.
- *
- *
- * Originally envisioned in FirstBlood ICO contract.
- */
-contract Haltable is Ownable {
-    bool public halted;
+// ----------------------------------------------------------------------------
+// ERC20 Token, with the addition of symbol, name and decimals and an
+// initial fixed supply
+// ----------------------------------------------------------------------------
 
-    modifier stopInEmergency {
-        if (halted) revert();
-        _;
+contract FixedSupplyToken is ERC20Interface, Owned {
+    using SafeMath for uint;
+
+    string public symbol;
+    string public  name;
+    uint8 public decimals;
+    uint public _totalSupply;
+
+    mapping(address => uint) balances;
+    mapping(address => mapping(address => uint)) allowed;
+
+
+    // ------------------------------------------------------------------------
+    // Constructor
+    // ------------------------------------------------------------------------
+
+    function FixedSupplyToken() public {
+        symbol = "CBC";
+        name = "CashBagCoin";
+        decimals = 9;
+        _totalSupply = 367000000 * 10 ** uint(decimals);
+        balances[owner] = _totalSupply;
+        Transfer(address(0), owner, _totalSupply);
     }
 
-    modifier onlyInEmergency {
-        if (!halted) revert();
-        _;
+
+    // ------------------------------------------------------------------------
+    // Total supply
+    // ------------------------------------------------------------------------
+
+    function totalSupply() public constant returns (uint) {
+        return _totalSupply - balances[address(0)];
     }
 
-    // called by the owner on emergency, triggers stopped state
-    function halt() external onlyOwner {
-        halted = true;
+
+    // ------------------------------------------------------------------------
+    // Get the token balance for account `tokenOwner`
+    // ------------------------------------------------------------------------
+
+    function balanceOf(address tokenOwner) public constant returns (uint balance) {
+        return balances[tokenOwner];
     }
 
-    // called by the owner on end of emergency, returns to normal state
-    function unhalt() external onlyOwner onlyInEmergency {
-        halted = false;
+
+    // ------------------------------------------------------------------------
+    // Transfer the balance from token owner's account to `to` account
+    // - Owner's account must have sufficient balance to transfer
+    // - 0 value transfers are allowed
+    // ------------------------------------------------------------------------
+
+    function transfer(address to, uint tokens) public returns (bool success) {
+        balances[msg.sender] = balances[msg.sender].sub(tokens);
+        balances[to] = balances[to].add(tokens);
+        Transfer(msg.sender, to, tokens);
+        return true;
     }
 
-}
 
-////////////////////////////////////////////////////////////////////////////////////////
+    // ------------------------------------------------------------------------
+    // Token owner can approve for `spender` to transferFrom(...) `tokens`
+    // from the token owner's account
+    //
+    // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20-token-standard.md
+    // recommends that there are no checks for the approval double-spend attack
+    // as this should be implemented in user interfaces
+    // ------------------------------------------------------------------------
 
-contract Crowdsale  is Haltable {
-    using SafeMath for uint256;
-    event FundTransfer(address backer, uint amount, bool isContribution);
-    // Crowdsale end time has been changed
-    event EndsAtChanged(uint deadline);
-    event CSClosed(bool crowdsaleClosed);
-
-    address public beneficiary;
-    uint public amountRaised;
-    uint public amountAvailable;
-    uint public deadline;
-    uint public price;
-    token public tokenReward;
-    mapping(address => uint256) public balanceOf;
-    bool public crowdsaleClosed = false;
-
-    uint public numTokensLeft;
-    uint public numTokensSold;
-    /* the UNIX timestamp end date of the crowdsale */
-    //    uint public newDeadline;
-
-    /**
-     * Constrctor function
-     *
-     * Setup the owner
-     */
-    function Crowdsale(
-        address ifSuccessfulSendTo,
-        address addressOfTokenUsedAsReward,
-        uint unixTimestampEnd,
-        uint initialTokenSupply
-    ) public {
-        owner = msg.sender;
-
-        if(unixTimestampEnd == 0) {
-            revert();
-        }
-        uint dec = 1000000000;
-        numTokensLeft = initialTokenSupply.mul(dec);
-        deadline = unixTimestampEnd;
-
-        // Don't mess the dates
-        if(now >= deadline) {
-            revert();
-        }
-
-        beneficiary = ifSuccessfulSendTo;
-        price = 0.000000000000166666 ether;
-        tokenReward = token(addressOfTokenUsedAsReward);
+    function approve(address spender, uint tokens) public returns (bool success) {
+        allowed[msg.sender][spender] = tokens;
+        Approval(msg.sender, spender, tokens);
+        return true;
     }
 
-    /**
-     * Fallback function
-     *
-     * The function without name is the default function that is called whenever anyone sends funds to a contract
-     */
-    function () public stopInEmergency payable {
-        require(!crowdsaleClosed);
-        uint amount = msg.value;
-        uint leastAmount = 600000000000;
-        uint numTokens = amount.div(price);
 
-        uint stageOne = 1516622400;// 01/22/2018 @ 12:00pm (UTC)
-        uint stageTwo = 1517227200;// 01/29/2018 @ 12:00pm (UTC)
-        uint stageThree = 1517832000;// 02/05/2018 @ 12:00pm (UTC) - 1800 / 30min
-        uint stageFour = 1518436800;// 02/12/2018 @ 12:00pm (UTC)
+    // ------------------------------------------------------------------------
+    // Transfer `tokens` from the `from` account to the `to` account
+    //
+    // The calling account must already have sufficient tokens approve(...)-d
+    // for spending from the `from` account and
+    // - From account must have sufficient balance to transfer
+    // - Spender must have sufficient allowance to transfer
+    // - 0 value transfers are allowed
+    // ------------------------------------------------------------------------
 
-        uint numBonusTokens;
-        uint totalNumTokens;
-
-        /////////////////////////////
-        //  Next step is to add in a check to see once the new price goes live
-        ////////////////////////////
-        if(now < stageOne)
-        {
-            //  40% Presale bonus
-            numBonusTokens = (numTokens.div(100)).mul(40);
-            totalNumTokens = numTokens.add(numBonusTokens);
-        }
-        else if(now < stageTwo)
-        {
-            //  20% bonus
-            numBonusTokens = (numTokens.div(100)).mul(20);
-            totalNumTokens = numTokens.add(numBonusTokens);
-        }
-        else if(now < stageThree){
-            //  15% bonus
-            numBonusTokens = (numTokens.div(100)).mul(15);
-            totalNumTokens = numTokens.add(numBonusTokens);
-        }
-        else if(now < stageFour){
-            //  10% bonus
-            numBonusTokens = (numTokens.div(100)).mul(10);
-            totalNumTokens = numTokens.add(numBonusTokens);
-        }
-        else{
-            numBonusTokens = 0;
-            totalNumTokens = numTokens.add(numBonusTokens);
-        }
-
-        // do not sell less than 100 tokens at a time.
-        if (numTokens <= leastAmount) {
-            revert();
-        } else {
-            balanceOf[msg.sender] = balanceOf[msg.sender].add(amount);
-            amountRaised = amountRaised.add(amount);
-            amountAvailable = amountAvailable.add(amount);
-            numTokensSold = numTokensSold.add(totalNumTokens);
-            numTokensLeft = numTokensLeft.sub(totalNumTokens);
-            tokenReward.transfer(msg.sender, totalNumTokens);
-            FundTransfer(msg.sender, amount, true);
-        }
+    function transferFrom(address from, address to, uint tokens) public returns (bool success) {
+        balances[from] = balances[from].sub(tokens);
+        allowed[from][msg.sender] = allowed[from][msg.sender].sub(tokens);
+        balances[to] = balances[to].add(tokens);
+        Transfer(from, to, tokens);
+        return true;
     }
 
-    ///////////////////////////////////////////////////////////
-    //     * Withdraw received funds
-    ///////////////////////////////////////////////////////////
-    function safeWithdrawal() public onlyOwner{
-        if(amountAvailable < 0)
-        {
-            revert();
-        }
-        else
-        {
-            uint amtA = amountAvailable;
-            amountAvailable = 0;
-            beneficiary.transfer(amtA);
-        }
+
+    // ------------------------------------------------------------------------
+    // Returns the amount of tokens approved by the owner that can be
+    // transferred to the spender's account
+    // ------------------------------------------------------------------------
+
+    function allowance(address tokenOwner, address spender) public constant returns (uint remaining) {
+        return allowed[tokenOwner][spender];
     }
 
-    ///////////////////////////////////////////////////////////
-    // Withdraw tokens
-    ///////////////////////////////////////////////////////////
-    function withdrawTheUnsoldTokens() public onlyOwner afterDeadline{
-        if(numTokensLeft <= 0)
-        {
-            revert();
-        }
-        else
-        {
-            uint ntl = numTokensLeft;
-            numTokensLeft=0;
-            tokenReward.transfer(beneficiary, ntl);
-            crowdsaleClosed = true;
-            CSClosed(crowdsaleClosed);
-        }
+
+    // ------------------------------------------------------------------------
+    // Token owner can approve for `spender` to transferFrom(...) `tokens`
+    // from the token owner's account. The `spender` contract function
+    // `receiveApproval(...)` is then executed
+    // ------------------------------------------------------------------------
+
+    function approveAndCall(address spender, uint tokens, bytes data) public returns (bool success) {
+        allowed[msg.sender][spender] = tokens;
+        Approval(msg.sender, spender, tokens);
+        ApproveAndCallFallBack(spender).receiveApproval(msg.sender, tokens, this, data);
+        return true;
     }
 
-    /////////////////////////////////////////////////////////////
-    // give the crowdsale a new newDeadline
-    ////////////////////////////////////////////////////////////
 
-    modifier afterDeadline() { if (now >= deadline) _; }
+    // ------------------------------------------------------------------------
+    // Owner can transfer out any accidentally sent ERC20 tokens
+    // ------------------------------------------------------------------------
 
-    function setDeadline(uint time) public onlyOwner {
-        if(now > time || msg.sender==beneficiary)
-        {
-            revert(); // Don't change past
-        }
-        deadline = time;
-        EndsAtChanged(deadline);
+    function transferAnyERC20Token(address tokenAddress, uint tokens) public onlyOwner returns (bool success) {
+        return ERC20Interface(tokenAddress).transfer(owner, tokens);
     }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
 }
