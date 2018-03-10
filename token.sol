@@ -3,7 +3,7 @@ pragma solidity 0.4.18;
 // ----------------------------------------------------------------------------
 //
 // Symbol      : CBC
-// Name        : CashBag Coin
+// Name        : CashBagCoin
 // Total supply: 367,000,000.000000000000000000
 // Decimals    : 9
 //
@@ -118,7 +118,7 @@ contract FixedSupplyToken is ERC20Interface, Owned {
 
     function FixedSupplyToken() public {
         symbol = "CBC";
-        name = "CashBag Coin";
+        name = "CashBagCoin";
         decimals = 9;
         _totalSupply = 367000000 * 10 ** uint(decimals);
         balances[owner] = _totalSupply;
